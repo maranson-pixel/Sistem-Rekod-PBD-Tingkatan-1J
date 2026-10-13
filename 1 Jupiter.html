@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Rekod Transit PBD</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%);
+            min-height: 100vh;
+        }
+        
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .glass-panel {
+                background: transparent;
+                backdrop-filter: none;
+                -webkit-backdrop-filter: none;
+                border: none;
+                box-shadow: none;
+            }
+            .print-border-none textarea {
+                border: none !important;
+                resize: none;
+                background: transparent !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // --- Data Awalan ---
+        const initialTopics = [
+            { id: 'T1', name: 'Nombor Nisbah' },
+            { id: 'T2', name: 'Faktor dan Gandaan' },
+            { id: 'T3', name: 'Kuasa Dua, Punca Kuasa Dua, Kuasa Tiga dan Punca Kuasa Tiga' },
+            { id: 'T4', name: 'Nisbah, Kadar dan Kadaran' },
+            { id: 'T5', name: 'Ungkapan Algebra' },
+            { id: 'T6', name: 'Persamaan Linear' },
+            { id: 'T7', name: 'Ketaksamaan Linear' },
+            { id: 'T8', name: 'Garis dan Sudut' },
+            { id: 'T9', name: 'Poligon Asas' },
+            { id: 'T10', name: 'Perimeter dan Luas' },
+            { id: 'T11', name: 'Pengenalan Set' },
+            { id: 'T12', name: 'Pengendalian Data' },
+            { id: 'T13', name: 'Teorem Pythagoras' }
+        ];
+
+        const initialStudents = [
+            { id: 1, name: 'CHRIST PUTRA ELVINE A/L HANAFFIE', marks: {} },
+            { id: 2, name: 'ALVIRA A/P SANWIN', marks: {} }
+        ];
+
+        const initialSettings = {
+            schoolLogo: '',
+            subjectName: 'Matematik',
+            formName: 'Tingkatan 1'
+        };
+
+        // --- Logik Penukaran TP ---
+        const getTPInfo = (mark) => {
+            if (mark === '' || mark === null || mark === undefined) return { tp: '-', color: 'bg-gray-200 text-gray-700' };
+            const m = parseFloat(mark);
+            if (m < 20) return { tp: 1, color: 'bg-red-500 text-white' };
+            if (m < 40) return { tp: 2, color: 'bg-orange-500 text-white' };
+            if (m < 60) return { tp: 3, color: 'bg-yellow-400 text-gray-800' };
+            if (m < 75) return { tp: 4, color: 'bg-blue-500 text-white' };
+            if (m < 90) return { tp: 5, color: 'bg-purple-500 text-white' };
+            return { tp: 6, color: 'bg-green-500 text-white' };
+        };
+
+        const calculateAverage = (marksObj, topics) => {
+            let total = 0;
+            let count = 0;
+            topics.forEach(t => {
+                if (marksObj[t.id] !== undefined && marksObj[t.id] !== '') {
+                    total += parseFloat(marksObj[t.id]);
+                    count++;
+                }
+            });
+            return count > 0 ? (total / count).toFixed(2) : 0;
+        };
+
+        // --- Komponen Utama ---
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [students, setStudents] = useState(initialStudents);
+            const [topics, setTopics] = useState(initialTopics);
+            const [settings, setSettings] = useState(initialSettings);
+
+            // Load from LocalStorage
+            useEffect(() => {
+                const savedData = localStorage.getItem('pbdData');
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    setStudents(parsed.students || initialStudents);
+                    setTopics(parsed.topics || initialTopics);
+                    setSettings(parsed.settings || initialSettings);
+                }
+            }, []);
+
+            // Save to LocalStorage
+            useEffect(() => {
+                localStorage.setItem('pbdData', JSON.stringify({ students, topics, settings }));
+            }, [students, topics, settings]);
+
+            return (
+                <div className="p-4 md:p-8 min-h-screen">
+                    <div className="max-w-7xl mx-auto">
+                        
+                        {/* Header */}
+                        <header className="glass-panel rounded-2xl p-6 mb-6 flex flex-col md:flex-row justify-between items-center no-print">
+                            <div className="flex items-center gap-4">
+                                {settings.schoolLogo ? (
+                                    <img src={settings.schoolLogo} alt="Logo" className="h-16 w-16 object-contain rounded-full bg-white/50 p-1" />
+                                ) : (
+                                    <div className="h-16 w-16 bg-white/50 rounded-full flex items-center justify-center font-bold text-gray-400">Logo</div>
+                                )}
+                                <div>
+                                    <h1 className="text-2xl font-bold text-gray-800">Sistem Rekod Transit PBD</h1>
+                                    <p className="text-gray-600 font-medium">{settings.subjectName} • {settings.formName}</p>
+                                </div>
+                            </div>
+                            <nav className="mt-4 md:mt-0 flex gap-2 overflow-x-auto">
+                                {['dashboard', 'transit', 'report', 'settings'].map(tab => (
+                                    <button 
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`px-4 py-2 rounded-xl font-semibold capitalize transition-all ${
+                                            activeTab === tab ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:bg-white/40'
+                                        }`}
+                                    >
+                                        {tab === 'report' ? 'Pelaporan' : tab === 'settings' ? 'Tetapan' : tab}
+                                    </button>
+                                ))}
+                            </nav>
+                        </header>
+
+                        {/* Kandungan Tab */}
+                        <main>
+                            {activeTab === 'dashboard' && <Dashboard students={students} topics={topics} />}
+                            {activeTab === 'transit' && <TransitRecord students={students} setStudents={setStudents} topics={topics} />}
+                            {activeTab === 'report' && <IndividualReport students={students} topics={topics} settings={settings} />}
+                            {activeTab === 'settings' && <Settings settings={settings} setSettings={setSettings} topics={topics} setTopics={setTopics} students={students} setStudents={setStudents} />}
+                        </main>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Modul Dashboard ---
+        const Dashboard = ({ students, topics }) => {
+            const chartRef = useRef(null);
+            
+            // Analisis
+            const totalStudents = students.length;
+            const classTotalMarks = students.reduce((sum, s) => sum + parseFloat(calculateAverage(s.marks, topics) || 0), 0);
+            const classAverageMark = totalStudents > 0 ? (classTotalMarks / totalStudents).toFixed(2) : 0;
+            const classAverageTP = getTPInfo(classAverageMark).tp;
+
+            let tpCounts = {1:0, 2:0, 3:0, 4:0, 5:0, 6:0};
+            let interventionList = [];
+            let excellentList = [];
+
+            students.forEach(s => {
+                const avgMark = calculateAverage(s.marks, topics);
+                const tp = getTPInfo(avgMark).tp;
+                if (tp !== '-') {
+                    tpCounts[tp]++;
+                    if (tp <= 2) interventionList.push({ ...s, tp, avgMark });
+                    if (tp >= 5) excellentList.push({ ...s, tp, avgMark });
+                }
+            });
+
+            useEffect(() => {
+                const ctx = document.getElementById('tpChart').getContext('2d');
+                if (chartRef.current) chartRef.current.destroy();
+                
+                chartRef.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['TP1', 'TP2', 'TP3', 'TP4', 'TP5', 'TP6'],
+                        datasets: [{
+                            label: 'Jumlah Pelajar',
+                            data: [tpCounts[1], tpCounts[2], tpCounts[3], tpCounts[4], tpCounts[5], tpCounts[6]],
+                            backgroundColor: ['#ef4444', '#f97316', '#facc15', '#3b82f6', '#a855f7', '#22c55e'],
+                            borderRadius: 8
+                        }]
+                    },
+                    options: { responsive: true, maintainAspectRatio: false }
+                });
+            }, [students]);
+
+            return (
+                <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center">
+                            <span className="text-gray-500 text-sm font-semibold">Jumlah Pelajar</span>
+                            <span className="text-4xl font-bold text-gray-800">{totalStudents}</span>
+                        </div>
+                        <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center">
+                            <span className="text-gray-500 text-sm font-semibold">Purata Markah Kelas</span>
+                            <span className="text-4xl font-bold text-gray-800">{classAverageMark}</span>
+                        </div>
+                        <div className="glass-panel p-6 rounded-2xl flex flex-col items-center justify-center">
+                            <span className="text-gray-500 text-sm font-semibold">Purata TP Kelas</span>
+                            <span className={`mt-2 px-6 py-2 rounded-full text-2xl font-bold ${getTPInfo(classAverageMark).color}`}>
+                                TP {classAverageTP}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="glass-panel p-6 rounded-2xl">
+                        <h2 className="text-xl font-bold mb-4">Taburan Tahap Penguasaan (TP)</h2>
+                        <div className="h-64">
+                            <canvas id="tpChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="glass-panel p-6 rounded-2xl">
+                            <h2 className="text-lg font-bold text-red-600 mb-4">Senarai Intervensi (TP1 - TP2)</h2>
+                            <p className="text-sm text-gray-600 mb-2 italic">Cadangan: Bimbingan rapi secara individu atau berkumpulan.</p>
+                            <ul className="space-y-3">
+                                {interventionList.map(s => (
+                                    <li key={s.id} className="flex justify-between items-center bg-white/40 p-3 rounded-lg">
+                                        <span className="font-medium text-sm">{s.name}</span>
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${getTPInfo(s.avgMark).color}`}>TP {s.tp}</span>
+                                    </li>
+                                ))}
+                                {interventionList.length === 0 && <p className="text-gray-400 text-sm">Tiada pelajar dalam senarai ini.</p>}
+                            </ul>
+                        </div>
+                        <div className="glass-panel p-6 rounded-2xl">
+                            <h2 className="text-lg font-bold text-green-600 mb-4">Senarai Cemerlang (TP5 - TP6)</h2>
+                            <p className="text-sm text-gray-600 mb-2 italic">Cadangan: Latihan pengayaan dan penyelesaian masalah aras tinggi.</p>
+                            <ul className="space-y-3">
+                                {excellentList.map(s => (
+                                    <li key={s.id} className="flex justify-between items-center bg-white/40 p-3 rounded-lg">
+                                        <span className="font-medium text-sm">{s.name}</span>
+                                        <span className={`px-2 py-1 rounded text-xs font-bold ${getTPInfo(s.avgMark).color}`}>TP {s.tp}</span>
+                                    </li>
+                                ))}
+                                {excellentList.length === 0 && <p className="text-gray-400 text-sm">Tiada pelajar dalam senarai ini.</p>}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Modul Rekod Transit ---
+        const TransitRecord = ({ students, setStudents, topics }) => {
+            
+            const handleMarkChange = (studentId, topicId, val) => {
+                let mark = parseInt(val);
+                if (mark > 100) mark = 100;
+                if (mark < 0) mark = 0;
+                
+                const updated = students.map(s => {
+                    if (s.id === studentId) {
+                        return { ...s, marks: { ...s.marks, [topicId]: isNaN(mark) ? '' : mark } };
+                    }
+                    return s;
+                });
+                setStudents(updated);
+            };
+
+            const addStudent = () => {
+                const name = prompt("Masukkan nama pelajar:");
+                if (name) {
+                    setStudents([...students, { id: Date.now(), name: name.toUpperCase(), marks: {} }]);
+                }
+            };
+
+            const removeStudent = (id) => {
+                if (confirm("Adakah anda pasti mahu memadam pelajar ini?")) {
+                    setStudents(students.filter(s => s.id !== id));
+                }
+            };
+
+            return (
+                <div className="glass-panel p-6 rounded-2xl overflow-hidden">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold">Rekod Transit (Data Entry)</h2>
+                        <button onClick={addStudent} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">+ Tambah Pelajar</button>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse min-w-max">
+                            <thead>
+                                <tr className="bg-white/50 border-b border-white">
+                                    <th className="p-3 text-sm font-semibold text-gray-700 sticky left-0 bg-white/80 backdrop-blur-md">Nama Pelajar</th>
+                                    {topics.map(t => (
+                                        <th key={t.id} className="p-3 text-sm font-semibold text-gray-700 text-center" title={t.name}>{t.id}</th>
+                                    ))}
+                                    <th className="p-3 text-sm font-semibold text-gray-700 text-center">Tindakan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {students.map(s => (
+                                    <tr key={s.id} className="border-b border-white/40 hover:bg-white/20 transition-colors">
+                                        <td className="p-3 text-sm font-medium text-gray-800 sticky left-0 bg-white/40 backdrop-blur-md">{s.name}</td>
+                                        {topics.map(t => {
+                                            const mark = s.marks[t.id] !== undefined ? s.marks[t.id] : '';
+                                            const tpInfo = getTPInfo(mark);
+                                            return (
+                                                <td key={t.id} className="p-2 text-center">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <input 
+                                                            type="number" 
+                                                            min="0" max="100"
+                                                            value={mark}
+                                                            onChange={(e) => handleMarkChange(s.id, t.id, e.target.value)}
+                                                            className="w-16 p-1 text-center border border-white/60 bg-white/50 rounded outline-none focus:ring-2 focus:ring-blue-400"
+                                                        />
+                                                        {mark !== '' && (
+                                                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold shadow-sm ${tpInfo.color}`}>
+                                                                TP {tpInfo.tp}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            );
+                                        })}
+                                        <td className="p-3 text-center">
+                                            <button onClick={() => removeStudent(s.id)} className="text-red-500 hover:text-red-700 font-bold p-2 bg-red-100 rounded-full">🗑️</button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Modul Pelaporan Individu ---
+        const IndividualReport = ({ students, topics, settings }) => {
+            const [selectedStudentId, setSelectedStudentId] = useState(students.length > 0 ? students[0].id : null);
+            const chartRef = useRef(null);
+            
+            const student = students.find(s => s.id === parseInt(selectedStudentId));
+            
+            const avgMark = student ? calculateAverage(student.marks, topics) : 0;
+            const tpInfo = getTPInfo(avgMark);
+
+            let defaultUlasan = "";
+            if (tpInfo.tp <= 2) defaultUlasan = "Perlu bimbingan intensif dan latihan berterusan untuk memahami konsep asas.";
+            else if (tpInfo.tp <= 4) defaultUlasan = "Pencapaian memuaskan. Teruskan usaha untuk meningkatkan kefahaman penyelesaian masalah.";
+            else defaultUlasan = "Prestasi yang cemerlang. Boleh diberikan latihan pengayaan untuk merangsang kemahiran berfikir aras tinggi.";
+
+            const [ulasan, setUlasan] = useState("");
+
+            useEffect(() => { setUlasan(defaultUlasan); }, [selectedStudentId]);
+
+            useEffect(() => {
+                if (!student) return;
+                const ctx = document.getElementById('radarChart').getContext('2d');
+                if (chartRef.current) chartRef.current.destroy();
+
+                const dataMarks = topics.map(t => student.marks[t.id] || 0);
+
+                chartRef.current = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: topics.map(t => t.id),
+                        datasets: [{
+                            label: 'Markah Topik',
+                            data: dataMarks,
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                        }]
+                    },
+                    options: {
+                        scales: { r: { min: 0, max: 100 } },
+                        responsive: true, maintainAspectRatio: false
+                    }
+                });
+            }, [student, topics]);
+
+            if (!student) return <div>Sila tambah pelajar di Rekod Transit.</div>;
+
+            return (
+                <div className="space-y-6">
+                    <div className="glass-panel p-4 rounded-2xl no-print flex gap-4 items-center">
+                        <span className="font-semibold text-gray-700">Pilih Pelajar:</span>
+                        <select 
+                            className="p-2 rounded bg-white border border-gray-300 outline-none flex-1"
+                            value={selectedStudentId} 
+                            onChange={(e) => setSelectedStudentId(e.target.value)}
+                        >
+                            {students.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                        <button onClick={() => window.print()} className="bg-green-600 text-white px-6 py-2 rounded shadow font-medium">Cetak PDF</button>
+                    </div>
+
+                    <div className="glass-panel p-8 rounded-2xl print-border-none bg-white">
+                        <div className="flex border-b-2 border-gray-800 pb-4 mb-6">
+                            {settings.schoolLogo && <img src={settings.schoolLogo} alt="Logo Sekolah" className="h-24 w-24 object-contain mr-4" />}
+                            <div className="flex-1 flex flex-col justify-center">
+                                <h1 className="text-2xl font-bold uppercase tracking-wide">Laporan Pentaksiran Bilik Darjah</h1>
+                                <div className="grid grid-cols-2 mt-2 text-sm">
+                                    <p><strong>Subjek:</strong> {settings.subjectName}</p>
+                                    <p><strong>Tingkatan/Tahun:</strong> {settings.formName}</p>
+                                    <p><strong>Nama Pelajar:</strong> {student.name}</p>
+                                </div>
+                            </div>
+                            <div className="flex flex-col items-center justify-center border border-gray-300 p-4 rounded bg-gray-50">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Tahap Keseluruhan</span>
+                                <span className={`mt-1 text-2xl font-extrabold px-4 py-1 rounded shadow-sm ${tpInfo.color}`}>
+                                    TP {tpInfo.tp}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div>
+                                <h3 className="font-bold text-lg mb-3">Butiran Markah & Topik</h3>
+                                <table className="w-full text-sm border-collapse border border-gray-300">
+                                    <thead className="bg-gray-100">
+                                        <tr>
+                                            <th className="border border-gray-300 p-2 w-12 text-center">Kod</th>
+                                            <th className="border border-gray-300 p-2 text-left">Topik DSKP</th>
+                                            <th className="border border-gray-300 p-2 w-16 text-center">Markah</th>
+                                            <th className="border border-gray-300 p-2 w-16 text-center">TP</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {topics.map(t => {
+                                            const m = student.marks[t.id] !== undefined ? student.marks[t.id] : '-';
+                                            const tp = getTPInfo(m);
+                                            return (
+                                                <tr key={t.id}>
+                                                    <td className="border border-gray-300 p-2 text-center font-semibold">{t.id}</td>
+                                                    <td className="border border-gray-300 p-2">{t.name}</td>
+                                                    <td className="border border-gray-300 p-2 text-center">{m}</td>
+                                                    <td className={`border border-gray-300 p-2 text-center font-bold ${tp.tp !== '-' ? tp.color : ''}`}>
+                                                        {tp.tp !== '-' ? `TP ${tp.tp}` : '-'}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="flex flex-col">
+                                <h3 className="font-bold text-lg mb-3">Graf Perkembangan Topik</h3>
+                                <div className="h-64 mb-6">
+                                    <canvas id="radarChart"></canvas>
+                                </div>
+
+                                <h3 className="font-bold text-lg mb-2">Ulasan Guru & Tindakan Susulan</h3>
+                                <textarea 
+                                    className="w-full h-24 p-3 border border-gray-300 rounded bg-blue-50/50 outline-none"
+                                    value={ulasan}
+                                    onChange={(e) => setUlasan(e.target.value)}
+                                ></textarea>
+
+                                <div className="mt-12 flex justify-between px-10">
+                                    <div className="text-center">
+                                        <div className="border-b border-gray-800 w-40 h-10"></div>
+                                        <p className="mt-2 text-sm font-semibold">Tandatangan Guru</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="border-b border-gray-800 w-40 h-10"></div>
+                                        <p className="mt-2 text-sm font-semibold">Tandatangan Ibu Bapa</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Modul Tetapan ---
+        const Settings = ({ settings, setSettings, topics, setTopics, students, setStudents }) => {
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if(file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => setSettings({...settings, schoolLogo: event.target.result});
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const exportData = () => {
+                const dataStr = JSON.stringify({ students, topics, settings });
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = 'backup_pbd.json';
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if(file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const parsed = JSON.parse(event.target.result);
+                            if(parsed.students) setStudents(parsed.students);
+                            if(parsed.topics) setTopics(parsed.topics);
+                            if(parsed.settings) setSettings(parsed.settings);
+                            alert('Data berjaya dimuat naik!');
+                        } catch(err) {
+                            alert('Fail tidak sah.');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+
+            return (
+                <div className="glass-panel p-6 rounded-2xl max-w-4xl mx-auto space-y-8">
+                    <section>
+                        <h2 className="text-xl font-bold mb-4 border-b border-white/50 pb-2">Maklumat Asas</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-semibold mb-1">Nama Subjek</label>
+                                <input type="text" className="w-full p-2 border border-white/60 bg-white/50 rounded" value={settings.subjectName} onChange={e => setSettings({...settings, subjectName: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold mb-1">Tingkatan / Tahun</label>
+                                <input type="text" className="w-full p-2 border border-white/60 bg-white/50 rounded" value={settings.formName} onChange={e => setSettings({...settings, formName: e.target.value})} />
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-semibold mb-1">Logo Sekolah (Muat Naik Imej)</label>
+                                <input type="file" accept="image/*" onChange={handleImageUpload} className="w-full p-2 border border-white/60 bg-white/50 rounded" />
+                                {settings.schoolLogo && <img src={settings.schoolLogo} className="mt-2 h-16 w-16 object-contain rounded border border-gray-300 bg-white" />}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 className="text-xl font-bold mb-4 border-b border-white/50 pb-2">Pengurusan Topik DSKP</h2>
+                        <div className="space-y-2">
+                            {topics.map((t, index) => (
+                                <div key={t.id} className="flex gap-2">
+                                    <input type="text" className="w-16 p-2 border border-white/60 bg-white/50 rounded font-bold text-center" value={t.id} 
+                                        onChange={e => {
+                                            const newT = [...topics];
+                                            newT[index].id = e.target.value;
+                                            setTopics(newT);
+                                        }} 
+                                    />
+                                    <input type="text" className="flex-1 p-2 border border-white/60 bg-white/50 rounded" value={t.name} 
+                                        onChange={e => {
+                                            const newT = [...topics];
+                                            newT[index].name = e.target.value;
+                                            setTopics(newT);
+                                        }} 
+                                    />
+                                    <button className="px-3 bg-red-500 text-white rounded font-bold" onClick={() => setTopics(topics.filter((_, i) => i !== index))}>-</button>
+                                </div>
+                            ))}
+                            <button className="bg-blue-600 text-white px-4 py-2 rounded shadow text-sm mt-2" onClick={() => setTopics([...topics, {id: `T${topics.length+1}`, name: ''}])}>+ Tambah Topik</button>
+                        </div>
+                    </section>
+
+                    <section>
+                        <h2 className="text-xl font-bold mb-4 border-b border-white/50 pb-2">Pangkalan Data (Backup & Restore)</h2>
+                        <div className="flex flex-wrap gap-4 items-center">
+                            <button onClick={exportData} className="bg-green-600 text-white px-4 py-2 rounded shadow font-medium">📥 Muat Turun Data (Backup)</button>
+                            <label className="bg-purple-600 text-white px-4 py-2 rounded shadow font-medium cursor-pointer">
+                                📤 Muat Naik Data (Restore)
+                                <input type="file" accept=".json" onChange={importData} className="hidden" />
+                            </label>
+                        </div>
+                    </section>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
